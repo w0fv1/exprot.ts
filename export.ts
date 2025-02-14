@@ -1,6 +1,5 @@
 // @ts-nocheck
 
-// 导入必要的模块
 import { join } from "jsr:@std/path";
 
 // 定义要处理的文本文件扩展名
@@ -15,7 +14,10 @@ const EXCLUDE_PATHS = [
   "deno.lock",
   "package-lock.json",
   "export.ts",
+  ".next",
 ];
+
+// 后缀名与代码块语言的映射
 const languageMapping: { [ext: string]: string } = {
   ".ts": "typescript",
   ".js": "javascript",
@@ -23,6 +25,7 @@ const languageMapping: { [ext: string]: string } = {
   ".json": "json",
   ".vue": "vue",
 };
+
 // 获取当前工作目录
 const currentDir = Deno.cwd();
 
@@ -61,7 +64,6 @@ function getLanguage(filename: string): string {
   return languageMapping[ext] || "";
 }
 
-
 /**
  * 根据文件的完整路径生成锚点 id
  * @param fullPath 文件的完整路径
@@ -69,7 +71,8 @@ function getLanguage(filename: string): string {
  */
 function getAnchorId(fullPath: string): string {
   let relativePath = fullPath.replace(currentDir, "");
-  relativePath = relativePath.replace(/^[\/\\]+/, ""); // 去除开头的斜杠
+  // 去除开头的斜杠
+  relativePath = relativePath.replace(/^[\/\\]+/, "");
   return relativePath.replace(/[\/\\\.]/g, "-");
 }
 
@@ -143,6 +146,37 @@ async function outputFileContents(dir: string) {
 }
 
 /**
+ * 跨平台复制到剪贴板的简单实现
+ * 如果系统未安装相应的命令，或者系统不在支持列表，则无法复制。
+ * @param text 要复制的文本
+ */
+async function copyToClipboard(text: string) {
+  let cmd: string[];
+  if (Deno.build.os === "darwin") {
+    // macOS
+    cmd = ["pbcopy"];
+  } else if (Deno.build.os === "linux") {
+    // Linux
+    cmd = ["xclip", "-selection", "clipboard"];
+  } else if (Deno.build.os === "windows") {
+    // Windows
+    cmd = ["clip"];
+  } else {
+    console.error("当前操作系统不支持自动复制到剪贴板。");
+    return;
+  }
+
+  const p = Deno.run({
+    cmd,
+    stdin: "piped",
+  });
+
+  await p.stdin.write(new TextEncoder().encode(text));
+  p.stdin.close();
+  await p.status();
+}
+
+/**
  * 主函数
  */
 async function main() {
@@ -156,11 +190,27 @@ async function main() {
   outputContent += "\n# 文件内容\n";
   await outputFileContents(currentDir);
 
+  // 将结果写入 export.md
   try {
     await Deno.writeTextFile(outputFilePath, outputContent);
     console.log(`成功将内容输出到 ${outputFilePath}`);
   } catch (error) {
     console.error(`无法写入文件 ${outputFilePath}:`, error);
+  }
+
+  // 询问用户是否复制到剪贴板
+  console.log(`\n导出结束！按回车键复制内容到剪贴板，或输入"n"后回车以跳过。`);
+  const userInput = prompt("> ");
+  // 如果用户输入为空（即仅按回车），则执行复制
+  if (userInput === "") {
+    try {
+      await copyToClipboard(outputContent);
+      console.log("已将导出内容复制到剪贴板！");
+    } catch (error) {
+      console.error("复制到剪贴板失败：", error);
+    }
+  } else {
+    console.log("已跳过复制到剪贴板。");
   }
 }
 
