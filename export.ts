@@ -1,33 +1,257 @@
 // @ts-nocheck
 
+// 导入必要的模块
 import { join } from "jsr:@std/path";
 
 // 定义要处理的文本文件扩展名
-const TEXT_FILE_EXTENSIONS = [".ts", ".js", ".html", ".json", ".vue"];
-
-// 定义要排除的文件夹和文件
-const EXCLUDE_PATHS = [
-  "example",
-  "node_modules",
-  "out",
-  "dist",
-  "deno.lock",
-  "package-lock.json",
-  "export.ts",
-  ".next",
+const TEXT_FILE_EXTENSIONS = [
+  ".ts",   // TypeScript
+  ".js",   // JavaScript
+  ".jsx",  // React JavaScript
+  ".tsx",  // React TypeScript
+  ".html", // HTML
+  ".css",  // CSS
+  ".scss", // SASS/SCSS
+  ".json", // JSON
+  ".vue",  // Vue.js
+  ".java", // Java
+  ".py",   // Python
+  ".c",    // C
+  ".cpp",  // C++
+  ".h",    // C/C++ Header files
+  ".hpp",  // C++ Header files
+  ".cs",   // C#
+  ".go",   // Go
+  ".rs",   // Rust
+  ".php",  // PHP
+  ".sh",   // Shell Script
+  ".bat",  // Windows Batch Script
+  ".sql",  // SQL
+  ".md",   // Markdown
+  ".yaml", // YAML
+  ".yml",  // YAML (alternative extension)
+  ".toml", // TOML
+  ".xml",  // XML
+  ".swift",// Swift
+  ".kt",   // Kotlin
+  ".dart", // Dart (Flutter)
+  ".r",    // R Language
+  ".rb",   // Ruby
+  ".perl", // Perl
+  ".lua",  // Lua
+  ".ini",  // INI Config Files
+  ".cfg",  // Configuration Files
+  ".pl",   // Perl
+  ".dockerfile", // Dockerfile (can also be named without extension)
+  ".makefile"    // Makefile (can also be named without extension)
 ];
 
-// 后缀名与代码块语言的映射
+// 定义要排除的文件夹和文件
+// 定义要排除的文件夹和文件
+const EXCLUDE_PATHS = [
+  // 依赖管理目录
+  "node_modules",      // Node.js 依赖
+  "vendor",            // 依赖供应商目录（如 PHP Composer）
+
+  // 编译/构建输出
+  "out",               // 通用编译输出目录
+  "dist",              // 构建产物
+  "build",             // 编译生成文件
+  "target",            // Rust/Cargo 编译输出
+  ".next",             // Next.js 输出
+  ".vercel",           // Vercel 部署相关
+  ".nuxt",             // Nuxt.js 编译目录
+  ".expo",             // Expo（React Native）缓存
+  ".angular",          // Angular 缓存
+
+  // 版本控制相关
+  ".git",              // Git 版本控制目录
+  ".github",           // GitHub 配置目录
+  ".gitignore",        // Git 忽略文件
+  ".gitattributes",    // Git 属性文件
+  ".svn",              // SVN 版本控制目录
+  ".hg",               // Mercurial 版本控制目录
+
+  // 配置和临时文件
+  "deno.lock",         // Deno 依赖锁文件
+  "package-lock.json", // npm 依赖锁文件
+  "pnpm-lock.yaml",    // pnpm 依赖锁文件
+  "yarn.lock",         // Yarn 依赖锁文件
+  "bun.lockb",         // Bun 依赖锁文件
+  "composer.lock",     // PHP Composer 依赖锁文件
+  "Cargo.lock",        // Rust Cargo 依赖锁文件
+  "Gemfile.lock",      // Ruby Bundler 依赖锁文件
+
+  // IDE 和编辑器相关
+  ".vscode",           // VS Code 配置
+  ".idea",             // JetBrains IDE 配置（WebStorm、PyCharm 等）
+  ".DS_Store",         // macOS Finder 索引文件
+  "Thumbs.db",         // Windows 缓存文件
+
+  // 日志和缓存
+  "logs",              // 日志目录
+  ".cache",            // 通用缓存目录
+  ".npm",              // npm 缓存
+  ".yarn",             // Yarn 缓存
+  ".pnp",              // Yarn Plug'n'Play 缓存
+  ".turbo",            // TurboRepo 缓存
+  ".parcel-cache",     // Parcel 构建缓存
+  ".eslintcache",      // ESLint 缓存
+
+  // 环境变量和敏感文件
+  ".env",              // 环境变量文件
+  ".env.local",        // 本地环境变量
+  ".env.development",  // 开发环境变量
+  ".env.production",   // 生产环境变量
+  ".env.test",         // 测试环境变量
+
+  // 其他
+  "export.ts",         // 该项目的特定导出文件
+  "coverage",          // 代码覆盖率报告
+  "cypress",           // Cypress 端到端测试目录
+  "__pycache__",       // Python 缓存
+  ".pytest_cache",     // pytest 缓存
+  ".mypy_cache",       // mypy 缓存
+  "jest.config.js",    // Jest 配置文件
+  "test-results",      // 测试结果目录
+];
+
 const languageMapping: { [ext: string]: string } = {
+  // Web 开发
   ".ts": "typescript",
+  ".tsx": "typescript",
   ".js": "javascript",
+  ".jsx": "javascript",
   ".html": "html",
+  ".css": "css",
+  ".scss": "scss",
+  ".sass": "sass",
+  ".less": "less",
   ".json": "json",
   ".vue": "vue",
+  ".xml": "xml",
+  ".yaml": "yaml",
+  ".yml": "yaml",
+  ".toml": "toml",
+
+  // Python
+  ".py": "python",
+  ".pyw": "python",
+
+  // C/C++
+  ".c": "c",
+  ".cpp": "cpp",
+  ".cc": "cpp",
+  ".h": "c",
+  ".hpp": "cpp",
+
+  // Java
+  ".java": "java",
+  ".jsp": "java",
+
+  // C#
+  ".cs": "csharp",
+
+  // Go
+  ".go": "go",
+
+  // Rust
+  ".rs": "rust",
+
+  // PHP
+  ".php": "php",
+  ".phtml": "php",
+
+  // Shell 脚本
+  ".sh": "shell",
+  ".bash": "shell",
+  ".zsh": "shell",
+
+  // Windows 批处理
+  ".bat": "batch",
+  ".cmd": "batch",
+
+  // SQL
+  ".sql": "sql",
+
+  // Markdown / 文本相关
+  ".md": "markdown",
+  ".txt": "plaintext",
+
+  // Swift / iOS 开发
+  ".swift": "swift",
+
+  // Kotlin / Android 开发
+  ".kt": "kotlin",
+  ".kts": "kotlin",
+
+  // Dart / Flutter 开发
+  ".dart": "dart",
+
+  // Ruby
+  ".rb": "ruby",
+
+  // Perl
+  ".pl": "perl",
+  ".pm": "perl",
+
+  // Lua
+  ".lua": "lua",
+
+  // R 语言
+  ".r": "r",
+
+  // 配置 / Makefile / 脚本
+  ".ini": "ini",
+  ".cfg": "ini",
+  ".conf": "ini",
+  ".env": "ini",
+  ".dockerfile": "docker",
+  "Dockerfile": "docker",
+  "Makefile": "makefile",
+  "CMakeLists.txt": "cmake",
+  ".cmake": "cmake",
+
+  // Gradle / Groovy
+  ".gradle": "gradle",
+  ".groovy": "groovy",
+
+  // GraphQL
+  ".gql": "graphql",
+  ".graphql": "graphql",
+
+  // TypeScript 类型定义
+  ".d.ts": "typescript",
+
+  // AppleScript
+  ".applescript": "applescript",
+
+  // LaTeX
+  ".tex": "latex",
+
+  // Haskell
+  ".hs": "haskell",
+
+  // Scala
+  ".scala": "scala",
+
+  // Objective-C / Objective-C++
+  ".m": "objectivec",
+  ".mm": "objectivecpp"
 };
 
-// 获取当前工作目录
-const currentDir = Deno.cwd();
+
+// ========== 这里开始是唯一的改动部分，增加对 path 参数的处理 ==========
+// 将 const 修改为 let，便于根据用户传入的 path= 参数重置目录
+let currentDir = Deno.cwd();
+
+// 在 Deno.args 中查找是否带有 path= 前缀的参数
+const paramPath = Deno.args.find((arg) => arg.startsWith("path="));
+// 如果找到了 path 参数，则将 currentDir 设置为对应的路径值
+if (paramPath) {
+  currentDir = paramPath.split("=")[1];
+}
+// ========== 改动部分结束，其它内容保持不变 ==========
 
 // 定义输出文件路径
 const outputFilePath = join(currentDir, "export.md");
@@ -71,8 +295,7 @@ function getLanguage(filename: string): string {
  */
 function getAnchorId(fullPath: string): string {
   let relativePath = fullPath.replace(currentDir, "");
-  // 去除开头的斜杠
-  relativePath = relativePath.replace(/^[\/\\]+/, "");
+  relativePath = relativePath.replace(/^[\/\\]+/, ""); // 去除开头的斜杠
   return relativePath.replace(/[\/\\\.]/g, "-");
 }
 
@@ -146,41 +369,10 @@ async function outputFileContents(dir: string) {
 }
 
 /**
- * 跨平台复制到剪贴板的简单实现
- * 如果系统未安装相应的命令，或者系统不在支持列表，则无法复制。
- * @param text 要复制的文本
- */
-async function copyToClipboard(text: string) {
-  let cmd: string[];
-  if (Deno.build.os === "darwin") {
-    // macOS
-    cmd = ["pbcopy"];
-  } else if (Deno.build.os === "linux") {
-    // Linux
-    cmd = ["xclip", "-selection", "clipboard"];
-  } else if (Deno.build.os === "windows") {
-    // Windows
-    cmd = ["clip"];
-  } else {
-    console.error("当前操作系统不支持自动复制到剪贴板。");
-    return;
-  }
-
-  const p = Deno.run({
-    cmd,
-    stdin: "piped",
-  });
-
-  await p.stdin.write(new TextEncoder().encode(text));
-  p.stdin.close();
-  await p.status();
-}
-
-/**
  * 主函数
  */
 async function main() {
-  console.log("开始导出..");
+  console.log("开始导出..");``
 
   // 输出文件层级结构（使用 Markdown 无序列表形式）
   outputContent += "# 文件层级结构\n\n";
@@ -190,27 +382,11 @@ async function main() {
   outputContent += "\n# 文件内容\n";
   await outputFileContents(currentDir);
 
-  // 将结果写入 export.md
   try {
     await Deno.writeTextFile(outputFilePath, outputContent);
     console.log(`成功将内容输出到 ${outputFilePath}`);
   } catch (error) {
     console.error(`无法写入文件 ${outputFilePath}:`, error);
-  }
-
-  // 询问用户是否复制到剪贴板
-  console.log(`\n导出结束！按回车键复制内容到剪贴板，或输入"n"后回车以跳过。`);
-  const userInput = prompt("> ");
-  // 如果用户输入为空（即仅按回车），则执行复制
-  if (userInput === "") {
-    try {
-      await copyToClipboard(outputContent);
-      console.log("已将导出内容复制到剪贴板！");
-    } catch (error) {
-      console.error("复制到剪贴板失败：", error);
-    }
-  } else {
-    console.log("已跳过复制到剪贴板。");
   }
 }
 
