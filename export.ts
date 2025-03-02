@@ -241,17 +241,10 @@ const languageMapping: { [ext: string]: string } = {
 };
 
 
-// ========== 这里开始是唯一的改动部分，增加对 path 参数的处理 ==========
-// 将 const 修改为 let，便于根据用户传入的 path= 参数重置目录
-let currentDir = Deno.cwd();
-
-// 在 Deno.args 中查找是否带有 path= 前缀的参数
-const paramPath = Deno.args.find((arg) => arg.startsWith("path="));
-// 如果找到了 path 参数，则将 currentDir 设置为对应的路径值
-if (paramPath) {
-  currentDir = paramPath.split("=")[1];
-}
-// ========== 改动部分结束，其它内容保持不变 ==========
+// 获取命令行参数：期望用户直接传入目录路径
+// deno run --allow-read --allow-write export.ts /path/to/directory
+const inputDir = Deno.args[0] || "."; // 如果用户未输入路径，默认为当前目录
+const currentDir = inputDir === "." ? Deno.cwd() : inputDir; // 处理 "." 使其指向当前目录
 
 // 定义输出文件路径
 const outputFilePath = join(currentDir, "export.md");
