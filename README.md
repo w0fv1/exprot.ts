@@ -35,27 +35,88 @@
 
 脚本使用 Deno 的内置 API（`Deno.readDir`、`Deno.readTextFile`、`Deno.writeTextFile` 等），无需额外安装任何第三方库。
 
----
 
-## 使用方法
+## **使用方法**
 
-1. **克隆或复制脚本**  
-   将 `export.ts` 文件放到你的项目根目录下，确保它与需导出的文件目录处在同一个层级（或者你想要遍历的目标目录下）。
+### **1. 直接运行远程脚本（无需下载）**
+如果你不想手动下载 `export.ts`，可以直接使用 Deno 运行远程脚本：
 
-2. **运行脚本**  
-   在命令行（终端）中定位到脚本所在目录，执行以下命令：
-   ```bash
-   deno run --allow-read --allow-write .\export.ts
-   ```
-   > - `--allow-read` 和 `--allow-write` 是必要权限，用于读取本地文件和写入 `export.md` 文件。
-   > - Windows 下使用 `.\export.ts`，其他系统下请使用 `./export.ts`。
+```bash
+deno run --allow-read --allow-write https://raw.githubusercontent.com/w0fv1/exprot.ts/refs/heads/main/export.ts
+```
 
-3. **查看输出**  
-   脚本执行完成后，会在当前目录生成一个 `export.md` 文件，其中包含：
-   - 整个项目的文件层级结构（只针对未排除的文件夹和文件）。
-   - 所有文本文件的内容及其自动生成的锚点链接。
+> - `--allow-read` 允许脚本读取本地文件。
+> - `--allow-write` 允许脚本在当前目录生成 `export.md` 文件。
+
+**⚠️ 注意：**
+- 该方法依赖于 GitHub 服务器，若文件 URL 变动或 GitHub 访问受限，可能会导致脚本无法运行。
+- 建议先检查 `export.ts` 代码内容，确保安全后再执行。
 
 ---
+
+### **2. 克隆或复制脚本（本地运行）**
+如果你希望本地运行 `export.ts`，可以按照以下步骤操作：
+
+#### **1️⃣ 下载脚本**
+将 `export.ts` 文件放到你的项目根目录下，确保它与需导出的文件目录处在同一个层级（或者你想要遍历的目标目录下）。
+
+#### **2️⃣ 运行脚本**
+在命令行（终端）中定位到脚本所在目录，执行以下命令：
+
+```bash
+deno run --allow-read --allow-write ./export.ts
+```
+> - Windows 下请使用 `.\export.ts`，其他系统下请使用 `./export.ts`。
+
+#### **3️⃣ 查看输出**
+脚本执行完成后，会在当前目录生成一个 `export.md` 文件，其中包含：
+- 整个项目的文件层级结构（只针对未排除的文件夹和文件）。
+- 所有文本文件的内容及其自动生成的锚点链接。
+
+---
+
+### **3. 通过 `deno install` 安装（推荐）**
+如果你希望更方便地运行 `export.ts`，可以使用 `deno install` 将其安装为全局命令。
+
+#### **1️⃣ 安装脚本**
+```bash
+deno install --global --allow-read --allow-write -n exp https://raw.githubusercontent.com/w0fv1/exprot.ts/refs/heads/main/export.ts
+```
+
+> - `--global` 让 Deno 作为全局命令安装（Deno 1.38+ 版本需要）。
+> - `--allow-read` 允许读取本地文件。
+> - `--allow-write` 允许在当前目录生成 `export.md` 文件。
+> - `-n exp` 指定命令名称为 `exp`，之后可以直接运行 `exp` 代替完整的命令。
+
+#### **2️⃣ 运行脚本**
+安装完成后，直接输入：
+```bash
+exp
+```
+即可运行脚本，无需输入长 URL！
+
+#### **3️⃣ 可能的额外步骤**
+如果 `exp` 运行时报错 `"command not found"`，请确保 **Deno 安装目录在 `PATH` 环境变量中**：
+- Windows 用户：确保 `C:\Users\你的用户名\.deno\bin` 在 `PATH` 变量中。
+- macOS/Linux 用户：确保 `~/.deno/bin` 在 `PATH` 变量中。
+
+你可以手动添加 `PATH`：
+```bash
+export PATH="$HOME/.deno/bin:$PATH"
+```
+或者 Windows 中执行：
+```powershell
+$env:Path += ";C:\Users\你的用户名\.deno\bin"
+```
+
+---
+
+### **对比 3 种方法**
+| 方法 | 适用场景 | 优点 | 缺点 |
+|------|----------|------|------|
+| **直接运行远程脚本** | 临时使用，不想下载 | 快速、无需手动下载 | 依赖 GitHub |
+| **克隆或复制脚本** | 本地开发、离线使用 | 适用于长期维护的项目 | 需要手动管理文件 |
+| **Deno Install 安装** | 经常使用该脚本 | 直接运行 `exp` 命令，最便捷 | 需要手动安装一次 |
 
 ## 自定义配置
 
