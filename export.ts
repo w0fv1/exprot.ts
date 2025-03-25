@@ -239,11 +239,28 @@ const languageMapping: { [ext: string]: string } = {
   ".m": "objectivec",
   ".mm": "objectivecpp"
 };
+// 从命令行参数解析排除文件或文件夹
+function parseExcludeArg(): string[] {
+  const excludeArgPrefix = "ex=";
+  for (const arg of Deno.args) {
+    if (arg.startsWith(excludeArgPrefix)) {
+      return arg
+        .slice(excludeArgPrefix.length)
+        .split(",")
+        .map((item) => item.trim());
+    }
+  }
+  return [];
+}
+
+// 获取用户指定排除的文件或文件夹
+const userExcludedPaths = parseExcludeArg();
 
 
 // 获取命令行参数：期望用户直接传入目录路径
 // deno run --allow-read --allow-write export.ts /path/to/directory
-const inputDir = Deno.args[0] || "."; // 如果用户未输入路径，默认为当前目录
+const inputDirArg = Deno.args.find((arg) => !arg.startsWith("ex="));
+const inputDir = inputDirArg || ".";
 const currentDir = inputDir === "." ? Deno.cwd() : inputDir; // 处理 "." 使其指向当前目录
 
 // 定义输出文件路径
@@ -268,7 +285,8 @@ function isTextFile(filename: string): boolean {
  * @returns 布尔值
  */
 function isExcluded(path: string): boolean {
-  return EXCLUDE_PATHS.some((excludedPath) => path.includes(excludedPath));
+  const combinedExcludePaths = EXCLUDE_PATHS.concat(userExcludedPaths);
+  return combinedExcludePaths.some((excludedPath) => path.includes(excludedPath));
 }
 
 /**
