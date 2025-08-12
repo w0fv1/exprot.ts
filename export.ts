@@ -158,7 +158,8 @@ async function buildTreeAndFiles(
     const childAbs = join(dirAbs, e.name);
     const childRel = dirRel ? `${dirRel}/${e.name}` : e.name;
     // 目录忽略：测试 "path/" 形式（ignore 库约定）
-    if (ig.ignores(`${childRel}/`)) continue;
+    const asDir = `${childRel}/`;
+    if (ig.ignores(childRel) || ig.ignores(asDir)) continue;
 
     const sub = await buildTreeAndFiles(root, ig, childAbs, childRel, depth + 1);
     if (sub.files.length === 0 && sub.lines.length === 0) continue; // 空目录或全被忽略
