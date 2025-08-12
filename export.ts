@@ -1,5 +1,6 @@
 // @ts-nocheck
-
+import { join, relative, SEP } from "jsr:@std/path";
+import { globToRegExp } from "jsr:@std/path/glob";
 // 导入必要的模块
 import { join } from "jsr:@std/path";
 
@@ -252,7 +253,73 @@ function parseExcludeArg(): string[] {
   }
   return [];
 }
+function toPosixRelative(fullPath: string): string {
+  const rel = relative(currentDir, fullPath);
+  return rel.split(SEP).join("/"); // Windows->POSIX
+}
 
+// 3) 将 .gitignore/静态排除 转为 glob
+function normalizeGitignoreLine(line: string): string | null {
+  const s = line.trim();
+  if (!s || s.startsWith("#")) return null;
+
+  // 去掉根锚定’/‘，让匹配基于“相对项目根的 POSIX 路径”
+  let pat = s.replace(/^\/+/, "");
+
+  // 目录规则结尾补上 **
+  if (pat.endsWith("/")) pat += "**";
+
+  // 普通路径补上前缀 **/ 以便任意层级匹配
+  if (!pat.startsWith("**/")) pat = `**/${pat}`;
+
+  return pat;
+}
+
+// 4) 读取 .gitignore 并生成正则
+async function loadGitignoreRegexps(baseDir: string): Promise<RegExp[]> {
+  const p = join(baseDir, ".gitignore");
+  try {
+    const stat = await Deno.stat(p);
+    if (!stat.isFile) return [];
+    const lines = (await Deno.readTextFile(p)).split("\n");
+
+    const globs = lines
+      .map(normalizeGitignoreLine)
+      .filter((v): v is string => !!v);
+
+    return globs.map((g) => globToRegExp(g, { extended: true, globstar: true }));
+  } catch {
+    return [];
+  }
+}
+
+// 5) 静态 EXCLUDE_PATHS 也当作 glob 处理
+function buildStaticExcludeRegexps(staticPaths: string[]): RegExp[] {
+  const globs = staticPaths.map((raw) => {
+    let pat = raw.trim();
+    if (!pat) return null;
+    pat = pat.replace(/^\/+/, "");
+    if (pat.endsWith("/")) pat += "**";
+    if (!pat.startsWith("**/")) pat = `**/${pat}`;
+    return pat;
+  }).filter((v): v is string => !!v);
+
+  return globs.map((g) => globToRegExp(g, { extended: true, globstar: true }));
+}
+
+// 6) 在启动时构建排除规则集合
+let EXCLUDE_REGEXPS: RegExp[] = [];
+async function initExcludes() {
+  const staticRegs = buildStaticExcludeRegexps(EXCLUDE_PATHS.concat(userExcludedPaths));
+  const gitignoreRegs = await loadGitignoreRegexps(currentDir);
+  EXCLUDE_REGEXPS = staticRegs.concat(gitignoreRegs);
+}
+
+// 7) 用正则判断排除
+function isExcluded(path: string): boolean {
+  const rel = toPosixRelative(path);
+  return EXCLUDE_REGEXPS.some((re) => re.test(rel));
+}
 // 获取用户指定排除的文件或文件夹
 const userExcludedPaths = parseExcludeArg();
 
@@ -414,16 +481,11 @@ async function loadGitignoreExcludes(baseDir: string): Promise<string[]> {
  */
 async function main() {
   console.log("开始导出..");
+  await initExcludes(); // 构建排除规则
 
-  // 如果当前目录包含 .gitignore，则追加忽略规则
-  const gitignoreExcludes = await loadGitignoreExcludes(currentDir);
-  EXCLUDE_PATHS.push(...gitignoreExcludes);
-
-  // 输出文件层级结构
   outputContent += "# 文件层级结构\n\n";
   await traverseDirectory(currentDir);
 
-  // 输出文件内容
   outputContent += "\n# 文件内容\n";
   await outputFileContents(currentDir);
 
@@ -434,6 +496,7 @@ async function main() {
     console.error(`无法写入文件 ${outputFilePath}:`, error);
   }
 }
+
 
 
 main();
