@@ -1,502 +1,223 @@
-// @ts-nocheck
-import { join, relative, SEP } from "jsr:@std/path";
-import { globToRegExp } from "jsr:@std/path/glob";
-// 导入必要的模块
-import { join } from "jsr:@std/path";
+// export.ts
+// deno run -A export.ts [rootDir] ex=pattern1,pattern2
+// 目标：基于 .gitignore 完整语义导出文本源文件到 export.md
 
-// 定义要处理的文本文件扩展名
-const TEXT_FILE_EXTENSIONS = [
-  ".ts",   // TypeScript
-  ".js",   // JavaScript
-  ".jsx",  // React JavaScript
-  ".tsx",  // React TypeScript
-  ".html", // HTML
-  ".css",  // CSS
-  ".scss", // SASS/SCSS
-  ".json", // JSON
-  ".vue",  // Vue.js
-  ".java", // Java
-  ".py",   // Python
-  ".c",    // C
-  ".cpp",  // C++
-  ".h",    // C/C++ Header files
-  ".hpp",  // C++ Header files
-  ".cs",   // C#
-  ".go",   // Go
-  ".rs",   // Rust
-  ".php",  // PHP
-  ".sh",   // Shell Script
-  ".bat",  // Windows Batch Script
-  ".sql",  // SQL
-  ".md",   // Markdown
-  ".yaml", // YAML
-  ".yml",  // YAML (alternative extension)
-  ".toml", // TOML
-  ".xml",  // XML
-  ".swift",// Swift
-  ".kt",   // Kotlin
-  ".dart", // Dart (Flutter)
-  ".r",    // R Language
-  ".rb",   // Ruby
-  ".perl", // Perl
-  ".lua",  // Lua
-  ".ini",  // INI Config Files
-  ".cfg",  // Configuration Files
-  ".pl",   // Perl
-  ".dockerfile", // Dockerfile (can also be named without extension)
-  ".makefile"    // Makefile (can also be named without extension)
-];
+// Imports
+import { join, relative } from "jsr:@std/path";
+import ignoreFactory from "npm:ignore"; // RFC 8288 风格 gitignore 语义实现
 
-// 定义要排除的文件夹和文件
-// 定义要排除的文件夹和文件
-const EXCLUDE_PATHS = [
-  // 依赖管理目录
-  "node_modules",      // Node.js 依赖
-  "vendor",            // 依赖供应商目录（如 PHP Composer）
-  ".venv", 
-  // 编译/构建输出
-  "out",               // 通用编译输出目录
-  "dist",              // 构建产物
-  "build",             // 编译生成文件
-  "target",            // Rust/Cargo 编译输出
-  ".next",             // Next.js 输出
-  ".vercel",           // Vercel 部署相关
-  ".nuxt",             // Nuxt.js 编译目录
-  ".expo",             // Expo（React Native）缓存
-  ".angular",          // Angular 缓存
+// ---------- 配置：文本文件判定与语言映射 ----------
+const TEXT_EXTS = new Set<string>([
+  ".ts",".tsx",".js",".jsx",".mjs",".cjs",
+  ".json",".md",".html",".css",".scss",".sass",".less",
+  ".vue",".xml",".yml",".yaml",".toml",".ini",".cfg",".conf",
+  ".py",".java",".c",".cpp",".h",".hpp",".cs",".go",".rs",".php",
+  ".sh",".bash",".zsh",".bat",".cmd",".sql",
+  ".swift",".kt",".kts",".dart",".rb",".pl",".pm",".lua",".r",
+  ".gql",".graphql",".tex",".hs",".scala",".m",".mm",".gradle",".groovy",
+  ".cmake"
+]);
+const TEXT_BASENAMES = new Set<string>([
+  "Dockerfile","Makefile","CMakeLists.txt",".gitignore",".gitattributes"
+]);
 
-  // 版本控制相关
-  ".git",              // Git 版本控制目录
-  ".github",           // GitHub 配置目录
-  ".gitignore",        // Git 忽略文件
-  ".gitattributes",    // Git 属性文件
-  ".svn",              // SVN 版本控制目录
-  ".hg",               // Mercurial 版本控制目录
-
-  // 配置和临时文件
-  "deno.lock",         // Deno 依赖锁文件
-  "package-lock.json", // npm 依赖锁文件
-  "pnpm-lock.yaml",    // pnpm 依赖锁文件
-  "yarn.lock",         // Yarn 依赖锁文件
-  "bun.lockb",         // Bun 依赖锁文件
-  "composer.lock",     // PHP Composer 依赖锁文件
-  "Cargo.lock",        // Rust Cargo 依赖锁文件
-  "Gemfile.lock",      // Ruby Bundler 依赖锁文件
-
-  // IDE 和编辑器相关
-  ".vscode",           // VS Code 配置
-  ".idea",             // JetBrains IDE 配置（WebStorm、PyCharm 等）
-  ".DS_Store",         // macOS Finder 索引文件
-  "Thumbs.db",         // Windows 缓存文件
-
-  // 日志和缓存
-  "logs",              // 日志目录
-  ".cache",            // 通用缓存目录
-  ".npm",              // npm 缓存
-  ".yarn",             // Yarn 缓存
-  ".pnp",              // Yarn Plug'n'Play 缓存
-  ".turbo",            // TurboRepo 缓存
-  ".parcel-cache",     // Parcel 构建缓存
-  ".eslintcache",      // ESLint 缓存
-
-  // 环境变量和敏感文件
-  ".env",              // 环境变量文件
-  ".env.local",        // 本地环境变量
-  ".env.development",  // 开发环境变量
-  ".env.production",   // 生产环境变量
-  ".env.test",         // 测试环境变量
-
-  // 其他
-  "export.ts",         // 该项目的特定导出文件
-  "coverage",          // 代码覆盖率报告
-  "cypress",           // Cypress 端到端测试目录
-  "__pycache__",       // Python 缓存
-  ".pytest_cache",     // pytest 缓存
-  ".mypy_cache",       // mypy 缓存
-  "jest.config.js",    // Jest 配置文件
-  "test-results",      // 测试结果目录
-];
-
-const languageMapping: { [ext: string]: string } = {
-  // Web 开发
-  ".ts": "typescript",
-  ".tsx": "typescript",
-  ".js": "javascript",
-  ".jsx": "javascript",
-  ".html": "html",
-  ".css": "css",
-  ".scss": "scss",
-  ".sass": "sass",
-  ".less": "less",
-  ".json": "json",
-  ".vue": "vue",
-  ".xml": "xml",
-  ".yaml": "yaml",
-  ".yml": "yaml",
-  ".toml": "toml",
-
-  // Python
-  ".py": "python",
-  ".pyw": "python",
-
-  // C/C++
-  ".c": "c",
-  ".cpp": "cpp",
-  ".cc": "cpp",
-  ".h": "c",
-  ".hpp": "cpp",
-
-  // Java
-  ".java": "java",
-  ".jsp": "java",
-
-  // C#
-  ".cs": "csharp",
-
-  // Go
-  ".go": "go",
-
-  // Rust
-  ".rs": "rust",
-
-  // PHP
-  ".php": "php",
-  ".phtml": "php",
-
-  // Shell 脚本
-  ".sh": "shell",
-  ".bash": "shell",
-  ".zsh": "shell",
-
-  // Windows 批处理
-  ".bat": "batch",
-  ".cmd": "batch",
-
-  // SQL
-  ".sql": "sql",
-
-  // Markdown / 文本相关
-  ".md": "markdown",
-  ".txt": "plaintext",
-
-  // Swift / iOS 开发
-  ".swift": "swift",
-
-  // Kotlin / Android 开发
-  ".kt": "kotlin",
-  ".kts": "kotlin",
-
-  // Dart / Flutter 开发
-  ".dart": "dart",
-
-  // Ruby
-  ".rb": "ruby",
-
-  // Perl
-  ".pl": "perl",
-  ".pm": "perl",
-
-  // Lua
-  ".lua": "lua",
-
-  // R 语言
-  ".r": "r",
-
-  // 配置 / Makefile / 脚本
-  ".ini": "ini",
-  ".cfg": "ini",
-  ".conf": "ini",
-  ".env": "ini",
-  ".dockerfile": "docker",
-  "Dockerfile": "docker",
-  "Makefile": "makefile",
-  "CMakeLists.txt": "cmake",
-  ".cmake": "cmake",
-
-  // Gradle / Groovy
-  ".gradle": "gradle",
-  ".groovy": "groovy",
-
-  // GraphQL
-  ".gql": "graphql",
-  ".graphql": "graphql",
-
-  // TypeScript 类型定义
-  ".d.ts": "typescript",
-
-  // AppleScript
-  ".applescript": "applescript",
-
-  // LaTeX
-  ".tex": "latex",
-
-  // Haskell
-  ".hs": "haskell",
-
-  // Scala
-  ".scala": "scala",
-
-  // Objective-C / Objective-C++
-  ".m": "objectivec",
-  ".mm": "objectivecpp"
+const LANG_BY_EXT: Record<string,string> = {
+  ".ts":"typescript",".tsx":"typescript",".js":"javascript",".jsx":"javascript",".mjs":"javascript",".cjs":"javascript",
+  ".json":"json",".md":"markdown",".html":"html",".css":"css",".scss":"scss",".sass":"sass",".less":"less",
+  ".vue":"vue",".xml":"xml",".yml":"yaml",".yaml":"yaml",".toml":"toml",".ini":"ini",".cfg":"ini",".conf":"ini",
+  ".py":"python",".java":"java",".c":"c",".cpp":"cpp",".h":"c",".hpp":"cpp",".cs":"csharp",".go":"go",".rs":"rust",".php":"php",
+  ".sh":"bash",".bash":"bash",".zsh":"bash",".bat":"batch",".cmd":"batch",".sql":"sql",
+  ".swift":"swift",".kt":"kotlin",".kts":"kotlin",".dart":"dart",".rb":"ruby",".pl":"perl",".pm":"perl",".lua":"lua",".r":"r",
+  ".gql":"graphql",".graphql":"graphql",".tex":"latex",".hs":"haskell",".scala":"scala",".m":"objectivec",".mm":"objectivecpp",
+  ".gradle":"gradle",".groovy":"groovy",".cmake":"cmake"
 };
-// 从命令行参数解析排除文件或文件夹
-function parseExcludeArg(): string[] {
-  const excludeArgPrefix = "ex=";
-  for (const arg of Deno.args) {
-    if (arg.startsWith(excludeArgPrefix)) {
-      return arg
-        .slice(excludeArgPrefix.length)
-        .split(",")
-        .map((item) => item.trim());
-    }
-  }
-  return [];
-}
-function toPosixRelative(fullPath: string): string {
-  const rel = relative(currentDir, fullPath);
-  return rel.split(SEP).join("/"); // Windows->POSIX
-}
+const LANG_BY_BASENAME: Record<string,string> = {
+  "Dockerfile":"docker","Makefile":"makefile","CMakeLists.txt":"cmake"
+};
 
-// 3) 将 .gitignore/静态排除 转为 glob
-function normalizeGitignoreLine(line: string): string | null {
-  const s = line.trim();
-  if (!s || s.startsWith("#")) return null;
-
-  // 去掉根锚定’/‘，让匹配基于“相对项目根的 POSIX 路径”
-  let pat = s.replace(/^\/+/, "");
-
-  // 目录规则结尾补上 **
-  if (pat.endsWith("/")) pat += "**";
-
-  // 普通路径补上前缀 **/ 以便任意层级匹配
-  if (!pat.startsWith("**/")) pat = `**/${pat}`;
-
-  return pat;
+// ---------- CLI ----------
+type Cli = { root: string; extraPatterns: string[] };
+function parseCli(): Cli {
+  const rawRoot = Deno.args.find(a => !a.startsWith("ex=")) ?? ".";
+  const root = rawRoot === "." ? Deno.cwd() : rawRoot;
+  const exArg = Deno.args.find(a => a.startsWith("ex="))?.slice(3) ?? "";
+  const extraPatterns = exArg
+    .split(",")
+    .map(s => s.trim())
+    .filter(Boolean);
+  return { root, extraPatterns };
 }
 
-// 4) 读取 .gitignore 并生成正则
-async function loadGitignoreRegexps(baseDir: string): Promise<RegExp[]> {
-  const p = join(baseDir, ".gitignore");
+// ---------- 工具 ----------
+function toPosixPath(p: string): string { return p.replaceAll("\\", "/"); }
+function relPosix(root: string, absPath: string): string {
+  return toPosixPath(relative(root, absPath));
+}
+function isTextFile(name: string): boolean {
+  const dot = name.lastIndexOf(".");
+  const ext = dot >= 0 ? name.slice(dot) : "";
+  return TEXT_EXTS.has(ext) || TEXT_BASENAMES.has(name);
+}
+function languageOf(name: string): string {
+  const dot = name.lastIndexOf(".");
+  const ext = dot >= 0 ? name.slice(dot) : "";
+  if (LANG_BY_EXT[ext]) return LANG_BY_EXT[ext];
+  if (LANG_BY_BASENAME[name]) return LANG_BY_BASENAME[name];
+  return "";
+}
+function anchorOf(relPath: string): string {
+  // 稳定可读锚点：POSIX 相对路径中的非字母数字与点斜杠替换为 -
+  return relPath.replace(/[\/\\\. ]/g, "-");
+}
+
+// ---------- 核心：.gitignore 读取并“重定位”到仓库根 ----------
+// 规则：在子目录 .gitignore 中
+//   1) 以 "/" 开头的规则相对于该子目录；重定位为 `${dirRel}/${rule.slice(1)}`
+//   2) 含 "/" 但不以 "/" 开头的规则相对该子目录；重定位为 `${dirRel}/${rule}`
+//   3) 不含 "/" 的“名字规则”适用于该子目录及其所有后代；重定位为 `${dirRel}/**/${rule}`
+//   4) 以 "!" 开头为反选，保持其位置优先级，前缀加在 "!" 之后
+//   5) 以 "\!" 或 "\#" 开头为字面量，不当作特殊前缀
+async function readGitignoreRaw(dirAbs: string): Promise<string[]> {
   try {
-    const stat = await Deno.stat(p);
-    if (!stat.isFile) return [];
-    const lines = (await Deno.readTextFile(p)).split("\n");
-
-    const globs = lines
-      .map(normalizeGitignoreLine)
-      .filter((v): v is string => !!v);
-
-    return globs.map((g) => globToRegExp(g, { extended: true, globstar: true }));
+    const text = await Deno.readTextFile(join(dirAbs, ".gitignore"));
+    // 保留行内空格，不 trimRight。空行直接忽略。
+    return text.split(/\r?\n/);
   } catch {
     return [];
   }
 }
+function rebasePatternToRoot(rawLine: string, dirRel: string): string | null {
+  if (!rawLine) return null;              // 空行
+  if (rawLine[0] === "#") return null;    // 注释（首字符 #，不含转义）
+  // 首字符转义的 "!" 或 "#" 视为普通模式
+  const isEscapedBang = rawLine.startsWith("\\!");
+  const isEscapedHash = rawLine.startsWith("\\#");
+  const neg = !isEscapedBang && rawLine[0] === "!";
+  let body = neg ? rawLine.slice(1) : rawLine;
+  // 去除前导的 "./" 兼容写法
+  if (body.startsWith("./")) body = body.slice(2);
 
-// 5) 静态 EXCLUDE_PATHS 也当作 glob 处理
-function buildStaticExcludeRegexps(staticPaths: string[]): RegExp[] {
-  const globs = staticPaths.map((raw) => {
-    let pat = raw.trim();
-    if (!pat) return null;
-    pat = pat.replace(/^\/+/, "");
-    if (pat.endsWith("/")) pat += "**";
-    if (!pat.startsWith("**/")) pat = `**/${pat}`;
-    return pat;
-  }).filter((v): v is string => !!v);
-
-  return globs.map((g) => globToRegExp(g, { extended: true, globstar: true }));
-}
-
-// 6) 在启动时构建排除规则集合
-let EXCLUDE_REGEXPS: RegExp[] = [];
-async function initExcludes() {
-  const staticRegs = buildStaticExcludeRegexps(EXCLUDE_PATHS.concat(userExcludedPaths));
-  const gitignoreRegs = await loadGitignoreRegexps(currentDir);
-  EXCLUDE_REGEXPS = staticRegs.concat(gitignoreRegs);
-}
-
-// 7) 用正则判断排除
-function isExcluded(path: string): boolean {
-  const rel = toPosixRelative(path);
-  return EXCLUDE_REGEXPS.some((re) => re.test(rel));
-}
-// 获取用户指定排除的文件或文件夹
-const userExcludedPaths = parseExcludeArg();
-
-
-// 获取命令行参数：期望用户直接传入目录路径
-// deno run --allow-read --allow-write export.ts /path/to/directory
-const inputDirArg = Deno.args.find((arg) => !arg.startsWith("ex="));
-const inputDir = inputDirArg || ".";
-const currentDir = inputDir === "." ? Deno.cwd() : inputDir; // 处理 "." 使其指向当前目录
-
-// 定义输出文件路径
-const outputFilePath = join(currentDir, "export.md");
-
-// 初始化输出内容
-let outputContent = "";
-
-/**
- * 判断文件是否为文本文件
- * @param filename 文件名
- * @returns 布尔值
- */
-function isTextFile(filename: string): boolean {
-  const ext = filename.slice(((filename.lastIndexOf(".") - 0) >>> 0) + 1);
-  return TEXT_FILE_EXTENSIONS.includes(`.${ext}`);
-}
-
-/**
- * 判断路径是否在排除列表中
- * @param path 路径
- * @returns 布尔值
- */
-function isExcluded(path: string): boolean {
-  const combinedExcludePaths = EXCLUDE_PATHS.concat(userExcludedPaths);
-  return combinedExcludePaths.some((excludedPath) => path.includes(excludedPath));
-}
-
-/**
- * 根据文件后缀返回代码块语言标识
- * @param filename 文件名
- * @returns 代码块语言标识
- */
-function getLanguage(filename: string): string {
-  const ext = filename.slice(filename.lastIndexOf("."));
-  return languageMapping[ext] || "";
-}
-
-/**
- * 根据文件的完整路径生成锚点 id
- * @param fullPath 文件的完整路径
- * @returns 锚点 id
- */
-function getAnchorId(fullPath: string): string {
-  let relativePath = fullPath.replace(currentDir, "");
-  relativePath = relativePath.replace(/^[\/\\]+/, ""); // 去除开头的斜杠
-  return relativePath.replace(/[\/\\\.]/g, "-");
-}
-
-/**
- * 递归遍历目录并构建 Markdown 无序列表格式的文件层级结构
- * @param dir 目录路径
- * @param depth 嵌套层级（用于控制缩进）
- */
-async function traverseDirectory(dir: string, depth: number = 0) {
-  const entries: Deno.DirEntry[] = [];
-  for await (const entry of Deno.readDir(dir)) {
-    entries.push(entry);
+  let rebased: string;
+  if (body.startsWith("/")) {
+    // 目录锚定到当前 .gitignore 所在目录
+    rebased = dirRel ? `${dirRel}${body}` : body.slice(1);
+  } else if (body.includes("/")) {
+    rebased = dirRel ? `${dirRel}/${body}` : body;
+  } else {
+    rebased = dirRel ? `${dirRel}/**/${body}` : `**/${body}`;
   }
-  // 可选：按名称排序
+  return neg ? `!${rebased}` : rebased;
+}
+
+// 预扫描所有子树中的 .gitignore，按“父->子”的顺序展平为**根相对**模式数组。
+// 为保持 Git 的优先级：父目录的规则先于子目录规则；同一目录内按文件行序。
+async function collectAllIgnorePatterns(root: string): Promise<string[]> {
+  const patterns: string[] = [];
+  async function dfs(dirAbs: string, dirRel: string): Promise<void> {
+    // 先处理当前目录 .gitignore
+    const lines = await readGitignoreRaw(dirAbs);
+    for (const line of lines) {
+      const rebased = rebasePatternToRoot(line, dirRel);
+      if (rebased) patterns.push(rebased);
+    }
+    // 再下潜子目录（按名称排序，稳定遍历）
+    const subs: string[] = [];
+    for await (const e of Deno.readDir(dirAbs)) {
+      if (e.isDirectory) subs.push(e.name);
+    }
+    subs.sort((a, b) => a.localeCompare(b));
+    for (const name of subs) {
+      const childAbs = join(dirAbs, name);
+      const childRel = dirRel ? `${dirRel}/${name}` : name;
+      await dfs(childAbs, childRel);
+    }
+  }
+  await dfs(root, "");
+  return patterns;
+}
+
+// ---------- 文件遍历（一次 DFS，收集目录树与文件清单） ----------
+type TreeResult = { lines: string[]; files: string[] };
+async function buildTreeAndFiles(
+  root: string,
+  ig: ReturnType<typeof ignoreFactory>,
+  dirAbs: string,
+  dirRel: string,
+  depth: number
+): Promise<TreeResult> {
+  const entries: Deno.DirEntry[] = [];
+  for await (const e of Deno.readDir(dirAbs)) entries.push(e);
   entries.sort((a, b) => a.name.localeCompare(b.name));
 
-  for (const entry of entries) {
-    const fullPath = join(dir, entry.name);
-    if (isExcluded(fullPath)) {
-      continue;
-    }
-    const indent = "  ".repeat(depth);
-    if (entry.isFile && isTextFile(entry.name)) {
-      const anchor = getAnchorId(fullPath);
-      outputContent += `${indent}- [${entry.name}](#${anchor})\n`;
-    } else {
-      outputContent += `${indent}- ${entry.name}\n`;
-    }
-    if (entry.isDirectory) {
-      await traverseDirectory(fullPath, depth + 1);
-    }
-  }
-}
+  const lines: string[] = [];
+  const files: string[] = [];
 
-/**
- * 递归读取目录中的文本文件并输出其内容
- * @param dir 目录路径
- */
-async function outputFileContents(dir: string) {
-  console.log(`开始读取目录: ${dir}`);
+  // 先处理目录，后处理文件，使树自然分组
+  for (const e of entries) {
+    if (!e.isDirectory) continue;
+    const childAbs = join(dirAbs, e.name);
+    const childRel = dirRel ? `${dirRel}/${e.name}` : e.name;
+    // 目录忽略：测试 "path/" 形式（ignore 库约定）
+    if (ig.ignores(`${childRel}/`)) continue;
 
-  for await (const entry of Deno.readDir(dir)) {
-    const fullPath = join(dir, entry.name);
-    console.log(`发现: ${fullPath}`);
-
-    if (isExcluded(fullPath)) {
-      console.log(`排除: ${fullPath}`);
-      continue;
-    }
-
-    if (entry.isDirectory) {
-      console.log(`进入子目录: ${fullPath}`);
-      await outputFileContents(fullPath);
-    } else if (entry.isFile && isTextFile(entry.name)) {
-      console.log(`读取文件: ${fullPath}`);
-      try {
-        const content = await Deno.readTextFile(fullPath);
-        const anchor = getAnchorId(fullPath);
-        const language = getLanguage(entry.name);
-        // 在文件内容前加入 HTML 锚点，便于跳转
-        outputContent += `\n<a id="${anchor}"></a>\n### ${entry.name}\n\`\`\`${language}\n${content}\n\`\`\`\n`;
-        console.log(`成功读取文件: ${fullPath}`);
-      } catch (error) {
-        outputContent += `\n**无法读取文件 ${fullPath}:** ${error}\n`;
-        console.error(`读取文件失败: ${fullPath}, 错误: ${error}`);
-      }
-    }
+    const sub = await buildTreeAndFiles(root, ig, childAbs, childRel, depth + 1);
+    if (sub.files.length === 0 && sub.lines.length === 0) continue; // 空目录或全被忽略
+    lines.push(`${"  ".repeat(depth)}- ${e.name}`);
+    lines.push(...sub.lines);
+    files.push(...sub.files);
   }
 
-  console.log(`完成读取目录: ${dir}`);
-}
-/**
- * 从当前目录加载 .gitignore 并解析忽略规则
- */
-async function loadGitignoreExcludes(baseDir: string): Promise<string[]> {
-  const gitignorePath = join(baseDir, ".gitignore");
-  try {
-    const stat = await Deno.stat(gitignorePath);
-    if (!stat.isFile) return [];
-
-    const lines = (await Deno.readTextFile(gitignorePath))
-      .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => line && !line.startsWith("#"));
-
-    // 转换成简单的匹配模式（这里使用直接字符串包含匹配）
-    // 如果需要更精准，可以替换成正则表达式匹配
-    const patterns: string[] = [];
-    for (const line of lines) {
-      if (line.endsWith("/")) {
-        // 目录
-        patterns.push(line.replace(/\/$/, ""));
-      } else {
-        patterns.push(line);
-      }
-    }
-    return patterns;
-  } catch {
-    return [];
+  for (const e of entries) {
+    if (!e.isFile) continue;
+    const rel = dirRel ? `${dirRel}/${e.name}` : e.name;
+    if (!isTextFile(e.name)) continue;
+    if (ig.ignores(rel)) continue;
+    const anchor = anchorOf(rel);
+    lines.push(`${"  ".repeat(depth)}- [${e.name}](#${anchor})`);
+    files.push(rel);
   }
+
+  return { lines, files };
 }
 
-/**
- * 主函数
- */
+// ---------- Markdown 生成 ----------
+async function generateMarkdown(
+  root: string,
+  files: string[],
+  treeLines: string[]
+): Promise<string> {
+  let out = "# 文件层级结构\n\n";
+  out += treeLines.join("\n") + "\n\n";
+  out += "# 文件内容\n";
+
+  for (const rel of files) {
+    const abs = join(root, rel);
+    const content = await Deno.readTextFile(abs).catch(err => `无法读取：${String(err)}`);
+    const lang = languageOf(rel.split("/").pop() ?? "");
+    const anchor = anchorOf(rel);
+    out += `\n<a id="${anchor}"></a>\n### ${rel}\n\`\`\`${lang}\n${content}\n\`\`\`\n`;
+  }
+  return out;
+}
+
+// ---------- main ----------
 async function main() {
-  console.log("开始导出..");
-  await initExcludes(); // 构建排除规则
+  const { root, extraPatterns } = parseCli();
 
-  outputContent += "# 文件层级结构\n\n";
-  await traverseDirectory(currentDir);
+  // 1) 汇总 .gitignore 规则并追加用户 ex= 规则（用户规则优先级最高）
+  const ignorePatterns = await collectAllIgnorePatterns(root);
+  const ig = ignoreFactory().add([...ignorePatterns, ...extraPatterns]);
 
-  outputContent += "\n# 文件内容\n";
-  await outputFileContents(currentDir);
+  // 2) 构建目录树与文件清单
+  const { lines, files } = await buildTreeAndFiles(root, ig, root, "", 0);
 
-  try {
-    await Deno.writeTextFile(outputFilePath, outputContent);
-    console.log(`成功将内容输出到 ${outputFilePath}`);
-  } catch (error) {
-    console.error(`无法写入文件 ${outputFilePath}:`, error);
-  }
+  // 3) 生成并写出
+  const md = await generateMarkdown(root, files, lines);
+  const outPath = join(root, "export.md");
+  await Deno.writeTextFile(outPath, md);
+  console.log(`导出完成 -> ${outPath}`);
 }
 
-
-
-main();
+if (import.meta.main) {
+  await main();
+}
