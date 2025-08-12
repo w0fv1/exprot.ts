@@ -52,7 +52,7 @@ const EXCLUDE_PATHS = [
   // 依赖管理目录
   "node_modules",      // Node.js 依赖
   "vendor",            // 依赖供应商目录（如 PHP Composer）
-
+  ".venv", 
   // 编译/构建输出
   "out",               // 通用编译输出目录
   "dist",              // 构建产物
@@ -378,18 +378,52 @@ async function outputFileContents(dir: string) {
 
   console.log(`完成读取目录: ${dir}`);
 }
+/**
+ * 从当前目录加载 .gitignore 并解析忽略规则
+ */
+async function loadGitignoreExcludes(baseDir: string): Promise<string[]> {
+  const gitignorePath = join(baseDir, ".gitignore");
+  try {
+    const stat = await Deno.stat(gitignorePath);
+    if (!stat.isFile) return [];
+
+    const lines = (await Deno.readTextFile(gitignorePath))
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith("#"));
+
+    // 转换成简单的匹配模式（这里使用直接字符串包含匹配）
+    // 如果需要更精准，可以替换成正则表达式匹配
+    const patterns: string[] = [];
+    for (const line of lines) {
+      if (line.endsWith("/")) {
+        // 目录
+        patterns.push(line.replace(/\/$/, ""));
+      } else {
+        patterns.push(line);
+      }
+    }
+    return patterns;
+  } catch {
+    return [];
+  }
+}
 
 /**
  * 主函数
  */
 async function main() {
-  console.log("开始导出..");``
+  console.log("开始导出..");
 
-  // 输出文件层级结构（使用 Markdown 无序列表形式）
+  // 如果当前目录包含 .gitignore，则追加忽略规则
+  const gitignoreExcludes = await loadGitignoreExcludes(currentDir);
+  EXCLUDE_PATHS.push(...gitignoreExcludes);
+
+  // 输出文件层级结构
   outputContent += "# 文件层级结构\n\n";
   await traverseDirectory(currentDir);
 
-  // 输出文件内容部分
+  // 输出文件内容
   outputContent += "\n# 文件内容\n";
   await outputFileContents(currentDir);
 
@@ -400,5 +434,6 @@ async function main() {
     console.error(`无法写入文件 ${outputFilePath}:`, error);
   }
 }
+
 
 main();
